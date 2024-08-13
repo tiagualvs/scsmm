@@ -5,6 +5,9 @@ version: 0.0.1
 environment:
   sdk: ^3.5.0
 
+executables: 
+  scsmm: bin/scsmm.dart
+
 dependencies:
   args: ^2.5.0
   path: ^1.9.0
