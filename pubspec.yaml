@@ -1,12 +1,10 @@
 name: scsmm
-description: A sample command-line application with basic argument parsing.
+description: SCS Mods Manager, a simple CLI to manager environments in your game directory.
 version: 0.0.1
+homepage: https://github.com/tihrasguinho/scsmm
 
 environment:
   sdk: ^3.5.0
-
-executables: 
-  scsmm: bin/scsmm.dart
 
 dependencies:
   args: ^2.5.0
