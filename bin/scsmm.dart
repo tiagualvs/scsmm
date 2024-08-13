@@ -5,7 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 
-const String version = '0.0.2';
+const String version = '0.0.1';
 
 ArgParser buildParser() {
   return ArgParser()
