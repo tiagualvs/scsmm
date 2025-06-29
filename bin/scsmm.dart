@@ -1,11 +1,14 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
+import 'package:win32/win32.dart';
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 
-const String version = '0.0.1';
+const String version = '0.0.2';
 
 ArgParser buildParser() {
   return ArgParser()
@@ -74,30 +77,31 @@ void printUsage(ArgParser argParser) {
   stdout.writeln(argParser.usage);
 }
 
-void main(List<String> arguments) {
+void main(List<String> arguments) async {
   final ArgParser argParser = buildParser();
   try {
     final ArgResults results = argParser.parse(arguments);
     final game = results['game'] as String;
+    final dir = await getRootDirectory(game);
 
     if (results.wasParsed('help')) {
       return printUsage(argParser);
     } else if (results.wasParsed('version')) {
       return stdout.writeln('SCS Mods Manager: $version');
     } else if (results.wasParsed('install')) {
-      return install(getRootDirectory(game));
+      return install(dir);
     } else if (results.wasParsed('uninstall')) {
-      return uninstall(getRootDirectory(game));
+      return uninstall(dir);
     } else if (results.wasParsed('status')) {
-      return status(getRootDirectory(game));
+      return status(dir);
     } else if (results.wasParsed('list')) {
-      return list(getRootDirectory(game));
+      return list(dir);
     } else if (results.wasParsed('create')) {
-      return create(getRootDirectory(game), results['create'] as String);
+      return create(dir, results['create'] as String);
     } else if (results.wasParsed('remove')) {
-      return remove(getRootDirectory(game), results['remove'] as String);
+      return remove(dir, results['remove'] as String);
     } else if (results.wasParsed('activate')) {
-      return activate(getRootDirectory(game), results['activate'] as String);
+      return activate(dir, results['activate'] as String);
     }
   } on Exception catch (e) {
     return stdout.writeln(e.toString().replaceFirst('Exception: ', ''));
@@ -110,7 +114,9 @@ void status(Directory dir) {
     stdout.writeln('The SCS Mods Manager is not installed.');
   } else {
     final yaml = loadYaml(config.readAsStringSync());
-    stdout.writeln('The SCS Mods Manager is installed.\nThe current environment is ${p.basename(yaml['current_environment'])}.');
+    stdout.writeln(
+      'The SCS Mods Manager is installed.\nThe current environment is ${p.basename(yaml['current_environment'])}.',
+    );
   }
 }
 
@@ -192,7 +198,9 @@ void activate(Directory dir, String envName) {
 
 void remove(Directory dir, String envName) {
   if (envName == 'Default') {
-    stdout.writeln('You cannot remove the default environment. If you want to uninstall use --uninstall instead to remove all enviroments.');
+    stdout.writeln(
+      'You cannot remove the default environment. If you want to uninstall use --uninstall instead to remove all enviroments.',
+    );
     return;
   }
   final config = getConfig(dir);
@@ -202,7 +210,9 @@ void remove(Directory dir, String envName) {
     return;
   }
   final currentEnv = envs.firstWhere((env) => p.basename(env) == envName);
-  stdout.writeln('You are about to remove the environment $envName. This action cannot be undone and all mods in the environment will be deleted.');
+  stdout.writeln(
+    'You are about to remove the environment $envName. This action cannot be undone and all mods in the environment will be deleted.',
+  );
   stdout.write('Are you sure you want to continue? [y/N] ');
   final option = stdin.readLineSync() ?? 'n';
   if (option.toLowerCase() == 'y') {
@@ -226,7 +236,9 @@ void remove(Directory dir, String envName) {
 
 void uninstall(Directory dir) {
   getConfig(dir);
-  stdout.writeln('This will delete all enviroments with every mod in them. The Default environment will not be deleted, it will be moved to the original path inside the game folder.');
+  stdout.writeln(
+    'This will delete all enviroments with every mod in them. The Default environment will not be deleted, it will be moved to the original path inside the game folder.',
+  );
   stdout.write('This action cannot be undone. Are you sure you want to continue? [y/N] ');
   final option = stdin.readLineSync() ?? 'n';
   if (option.toLowerCase() == 'y') {
@@ -273,40 +285,38 @@ void setConfig(Directory dir, Map<String, dynamic> config) {
   File(p.join(dir.path, '.scsmm', 'config.yaml')).writeAsStringSync(yaml.toString(), flush: true);
 }
 
-Directory getRootDirectory([String game = 'ets2']) {
-  final user = Platform.environment['USERPROFILE'];
-  final documents = switch (getLanguage()) {
-    'en-US' => 'Documents',
-    'pt-PT' => 'Documentos',
-    'fr-FR' => 'Documents',
-    'de-DE' => 'Dokumente',
-    'es-ES' => 'Documentos',
-    'it-IT' => 'Documenti',
-    'pl-PL' => 'Dokumenty',
-    'pt-BR' => 'Documentos',
-    'ru-RU' => 'Документы',
-    'zh-CN' => 'Documents',
-    'zh-TW' => 'Documents',
-    _ => 'Documents',
-  };
+Future<Directory> getRootDirectory([String game = 'ets2']) async {
+  final documents = getDocumentsPath();
   final gameName = switch (game) {
     'ets2' => 'Euro Truck Simulator 2',
     'ats' => 'American Truck Simulator',
     _ => 'Euro Truck Simulator 2',
   };
-  final generic = p.join('C:', 'Users', user, documents, gameName);
-  final oneDrive = p.join('C:', 'Users', user, 'OneDrive', documents, gameName);
-  if (Directory(generic).existsSync()) {
-    return Directory(generic);
-  } else if (Directory(oneDrive).existsSync()) {
-    return Directory(oneDrive);
+  final generic = Directory(p.join(documents, gameName));
+  final oneDrive = Directory(p.join(documents, 'OneDrive', gameName));
+  if (await generic.exists()) {
+    return generic;
+  } else if (await oneDrive.exists()) {
+    return oneDrive;
   } else {
     throw Exception('Could not find documents directory');
   }
 }
 
-String getLanguage() {
-  final result = Process.runSync('reg', ['query', 'HKEY_CURRENT_USER\\Control Panel\\International', '/v', 'LocaleName'], runInShell: true);
-  final regex = RegExp(r'LocaleName\s+REG_SZ\s+(\w{2}-\w{2})');
-  return regex.firstMatch(result.stdout.toString().trim())?.group(1) ?? '';
+String getDocumentsPath() {
+  final pathPtr = calloc<Pointer<Utf16>>();
+  final result = SHGetKnownFolderPath(
+    GUIDFromString(FOLDERID_Documents),
+    0,
+    NULL,
+    pathPtr,
+  );
+
+  if (result != S_OK) {
+    throw WindowsException(result);
+  }
+
+  final path = pathPtr.value.toDartString();
+  calloc.free(pathPtr);
+  return path;
 }
