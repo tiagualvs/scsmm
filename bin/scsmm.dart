@@ -9,7 +9,7 @@ import 'package:scsmm/environment.dart';
 import 'package:win32/win32.dart';
 import 'package:yaml/yaml.dart';
 
-const String version = '0.0.1+5';
+const String version = '0.0.1+6';
 
 ArgParser buildParser() {
   return ArgParser()
@@ -124,11 +124,11 @@ Future<void> status(Directory dir) async {
 Future<void> install(Directory dir) async {
   stdout.writeln(
     '''This action will create a new directory inside the game folder called `.scsmm` and will create a `config.yaml` file in it.
-  A default environment named `Default` will be created as a folder inside `.scsmm`.
-  This folder will contain every environment you create.
-  Your current mod folder will be moved to `.scsmm/Default` and activated as the default environment.
-  A symlink will be created from the old mod folder location to the current environment.
-  Initially, the symlink will point from `gamedir/mod` to `gamedir/.scsmm/Default`.''',
+A default environment named `Default` will be created as a folder inside `.scsmm`.
+This folder will contain every environment you create.
+Your current mod folder will be moved to `.scsmm/Default` and activated as the default environment.
+A symlink will be created from the old mod folder location to the current environment.
+Initially, the symlink will point from `gamedir/mod` to `gamedir/.scsmm/Default`.''',
   );
   stdout.write('Do you want to continue? (y/N) ');
   final option = stdin.readLineSync() ?? 'n';
