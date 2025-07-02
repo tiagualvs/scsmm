@@ -72,7 +72,7 @@ class Config {
     return Config(
       currentEnvironment: map['current_environment'] as String,
       environments: List<Environment>.from(
-        (map['environments'] as List).map<Environment>((x) => Environment.fromMap(x as Map<String, dynamic>)),
+        (map['environments'] as List).map<Environment>((x) => Environment.fromMap(Map<String, dynamic>.from(x))),
       ),
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
