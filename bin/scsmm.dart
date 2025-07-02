@@ -4,11 +4,12 @@ import 'dart:io';
 import 'package:args/args.dart';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
+import 'package:scsmm/config.dart';
+import 'package:scsmm/environment.dart';
 import 'package:win32/win32.dart';
 import 'package:yaml/yaml.dart';
-import 'package:yaml_edit/yaml_edit.dart';
 
-const String version = '0.0.3';
+const String version = '0.0.4';
 
 ArgParser buildParser() {
   return ArgParser()
@@ -136,15 +137,8 @@ Future<void> install(Directory dir) async {
     }
   }
   await link(mod, defaultEnv);
-  final config = <String, dynamic>{
-    'current_environment': defaultEnv.path,
-    'environments': [defaultEnv.path],
-    'created_at': DateTime.now().toIso8601String(),
-    'updated_at': DateTime.now().toIso8601String(),
-  };
-  final yaml = YamlEditor('');
-  yaml.update([], config);
-  await File(p.join(scsmm.path, 'config.yaml')).writeAsString(yaml.toString(), flush: true);
+  final config = Config.create(defaultEnv);
+  await config.save(dir);
   stdout.writeln('The SCS Mods Manager has been installed.');
 }
 
@@ -153,46 +147,46 @@ Future<void> create(Directory dir, String name) async {
     stdout.writeln('Environment name cannot be empty.');
     return;
   }
-  final config = await getConfig(dir);
-  final envs = (config['environments'] as List).cast<String>();
-  if (envs.contains(name)) {
+  Config config = await Config.load(dir);
+  if (config.environments.any((env) => env.name == name)) {
     stdout.writeln('Environment $name already exists. Please choose a different name.');
     return;
   }
   final newEnv = Directory(p.join(dir.path, '.scsmm', name));
   await newEnv.create(recursive: true);
-  config.update(
-    'environments',
-    (envs) => [...envs, newEnv.path],
-    ifAbsent: () => [newEnv.path],
+  config = config.copyWith(
+    environments: [
+      ...config.environments,
+      Environment(name: name, path: newEnv.path),
+    ],
   );
-  await setConfig(dir, config);
+  await config.save(dir);
   stdout.writeln('The environment $name has been created.');
 }
 
 Future<void> list(Directory dir) async {
-  final config = await getConfig(dir);
-  final current = config['current_environment'];
-  final envs = (config['environments'] as List).cast<String>();
+  final config = await Config.load(dir);
   stdout.writeln('-' * 80);
-  stdout.writeln('The SCS Mods Manager has ${envs.length} environment${envs.length <= 1 ? '' : 's'}.');
+  stdout.writeln(
+    'The SCS Mods Manager has ${config.environments.length} environment${config.environments.length <= 1 ? '' : 's'}.',
+  );
   stdout.writeln('-' * 80);
-  for (final env in envs) {
-    stdout.writeln('${p.basename(env)}${current == env ? '*' : ''}');
+  for (final environment in config.environments) {
+    stdout.writeln(environment.name + environment.name == config.currentEnvironment ? ' (active)' : '');
   }
 }
 
 Future<void> activate(Directory dir, String envName) async {
-  final config = await getConfig(dir);
-  final envs = (config['environments'] as List).cast<String>();
-  if (!envs.any((env) => p.basename(env) == envName)) {
+  Config config = await Config.load(dir);
+  final index = config.environments.indexWhere((env) => env.name == envName);
+  if (index == -1) {
     stdout.writeln('Environment $envName does not exist. Please choose a different name.');
     return;
   }
-  final newEnv = envs.firstWhere((env) => p.basename(env) == envName);
-  config.update('current_environment', (_) => newEnv);
-  await link(Directory(p.join(dir.path, 'mod')), Directory(newEnv));
-  await setConfig(dir, config);
+  final newEnv = config.environments[index];
+  config = config.copyWith(currentEnvironment: newEnv.name);
+  await link(Directory(p.join(dir.path, 'mod')), Directory(newEnv.path));
+  await config.save(dir);
   stdout.writeln('The environment $envName has been activated.');
 }
 
@@ -203,29 +197,28 @@ Future<void> remove(Directory dir, String envName) async {
     );
     return;
   }
-  final config = await getConfig(dir);
-  final envs = (config['environments'] as List).cast<String>();
-  if (!envs.any((env) => p.basename(env) == envName)) {
+  Config config = await Config.load(dir);
+  final index = config.environments.indexWhere((env) => env.name == envName);
+  if (index == -1) {
     stdout.writeln('Environment $envName does not exist. Please choose a different name.');
     return;
   }
-  final currentEnv = envs.firstWhere((env) => p.basename(env) == envName);
+  final currentEnv = config.environments[index];
   stdout.writeln(
     'You are about to remove the environment $envName. This action cannot be undone and all mods in the environment will be deleted.',
   );
   stdout.write('Are you sure you want to continue? [y/N] ');
   final option = stdin.readLineSync() ?? 'n';
   if (option.toLowerCase() == 'y') {
-    if (currentEnv == config['current_environment']) {
+    if (currentEnv.name == config.currentEnvironment) {
       await activate(dir, 'Default');
     }
-    await Directory(currentEnv).delete(recursive: true);
-    config.update(
-      'environments',
-      (_) => envs.where((env) => p.basename(env) != envName).toList(),
-      ifAbsent: () => [],
+    await Directory(currentEnv.path).delete(recursive: true);
+    config = config.copyWith(
+      environments: config.environments.where((env) => env.name != envName).toList(),
+      updatedAt: DateTime.now(),
     );
-    await setConfig(dir, config);
+    await config.save(dir);
     stdout.writeln('The environment $envName has been removed.');
     return;
   } else {
@@ -235,7 +228,6 @@ Future<void> remove(Directory dir, String envName) async {
 }
 
 Future<void> uninstall(Directory dir) async {
-  getConfig(dir);
   stdout.writeln(
     'This will delete all enviroments with every mod in them. The Default environment will not be deleted, it will be moved to the original path inside the game folder.',
   );
@@ -266,23 +258,6 @@ Future<void> link(Directory from, Directory to) async {
   } on Exception catch (e) {
     stdout.writeln('Error: ${e.toString()}');
   }
-}
-
-Future<Map<String, dynamic>> getConfig(Directory dir) async {
-  final config = File(p.join(dir.path, '.scsmm', 'config.yaml'));
-  if (!await config.exists()) {
-    throw Exception('The SCS Mods Manager is not installed.');
-  } else {
-    final yaml = loadYaml(await config.readAsString());
-    return Map.from(yaml);
-  }
-}
-
-Future<void> setConfig(Directory dir, Map<String, dynamic> config) async {
-  final yaml = YamlEditor('');
-  config.update('updated_at', (_) => DateTime.now().toIso8601String());
-  yaml.update([], config);
-  await File(p.join(dir.path, '.scsmm', 'config.yaml')).writeAsString(yaml.toString(), flush: true);
 }
 
 Future<Directory> getRootDirectory([String game = 'ets2']) async {
