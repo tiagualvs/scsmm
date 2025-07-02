@@ -9,7 +9,7 @@ import 'package:scsmm/environment.dart';
 import 'package:win32/win32.dart';
 import 'package:yaml/yaml.dart';
 
-const String version = '0.0.4';
+const String version = '0.0.5';
 
 ArgParser buildParser() {
   return ArgParser()
@@ -234,6 +234,7 @@ Future<void> uninstall(Directory dir) async {
   stdout.write('This action cannot be undone. Are you sure you want to continue? [y/N] ');
   final option = stdin.readLineSync() ?? 'n';
   if (option.toLowerCase() == 'y') {
+    stdout.writeln('Uninstalling...');
     final mod = Directory(p.join(dir.path, 'mod'));
     await mod.delete(recursive: true);
     final defaultEnv = Directory(p.join(dir.path, '.scsmm', 'Default'));
