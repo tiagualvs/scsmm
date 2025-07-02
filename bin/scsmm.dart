@@ -9,7 +9,7 @@ import 'package:scsmm/environment.dart';
 import 'package:win32/win32.dart';
 import 'package:yaml/yaml.dart';
 
-const String version = '0.0.5';
+const String version = '0.0.1+1';
 
 ArgParser buildParser() {
   return ArgParser()

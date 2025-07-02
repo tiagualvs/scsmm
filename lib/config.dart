@@ -26,7 +26,7 @@ class Config {
       throw Exception('The SCS Mods Manager is not installed.');
     }
     final yaml = loadYaml(await config.readAsString());
-    return Config.fromMap(yaml);
+    return Config.fromMap(Map<String, dynamic>.from(yaml));
   }
 
   static Config create(Directory dir) {
