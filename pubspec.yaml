@@ -1,7 +1,7 @@
 name: scsmm
 description: SCS Mods Manager, a simple CLI to manager environments in your game directory.
-version: 0.0.1+3
-homepage: https://github.com/tihrasguinho/scsmm
+version: 0.0.1+4
+homepage: https://github.com/tiagualvs/scsmm
 
 executables:
   scsmm: scsmm.dart

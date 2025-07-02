@@ -9,7 +9,7 @@ import 'package:scsmm/environment.dart';
 import 'package:win32/win32.dart';
 import 'package:yaml/yaml.dart';
 
-const String version = '0.0.1+3';
+const String version = '0.0.1+4';
 
 ArgParser buildParser() {
   return ArgParser()
@@ -212,6 +212,7 @@ Future<void> remove(Directory dir, String envName) async {
   if (option.toLowerCase() == 'y') {
     if (currentEnv.name == config.currentEnvironment) {
       await activate(dir, 'Default');
+      config = await Config.load(dir);
     }
     await Directory(currentEnv.path).delete(recursive: true);
     config = config.copyWith(
