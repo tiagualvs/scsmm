@@ -13,6 +13,12 @@ If you have the Dart SDK installed, you can install it directly from the source 
 ```shell
 dart pub global activate -sgit https://github.com/tiagualvs/scsmm.git
 ```
+> If youre using Dart version you can also use scs or mm instead of scsmm
+
+```shel
+scs <command> or mm <command>
+```
+
 > Make sure that `~/.pub-cache/bin` (on macOS/Linux) or `%USERPROFILE%\AppData\Local\Pub\Cache\bin` (on Windows) is in your system's PATH.
 
 ### 2. Via Executable

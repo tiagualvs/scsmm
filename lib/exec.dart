@@ -8,7 +8,7 @@ import 'package:scsmm/config.dart';
 import 'package:scsmm/environment.dart';
 import 'package:win32/win32.dart';
 
-const String version = '0.0.1+9';
+const String version = '0.0.1+10';
 
 ArgParser buildParser() {
   return ArgParser()
