@@ -7,9 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:scsmm/config.dart';
 import 'package:scsmm/environment.dart';
 import 'package:win32/win32.dart';
-import 'package:yaml/yaml.dart';
 
-const String version = '0.0.1+7';
+const String version = '0.0.1+8';
 
 ArgParser buildParser() {
   return ArgParser()
@@ -110,18 +109,18 @@ Future<void> exec(List<String> arguments) async {
 }
 
 Future<void> status(Directory dir) async {
-  final config = File(p.join(dir.path, '.scsmm', 'config.yaml'));
-  if (!await config.exists()) {
+  if (!await isInstalled(dir)) {
     stdout.writeln('The SCS Mods Manager is not installed.');
   } else {
-    final yaml = loadYaml(await config.readAsString());
-    stdout.writeln(
-      'The SCS Mods Manager is installed.\nThe current environment is ${p.basename(yaml['current_environment'])}.',
-    );
+    stdout.writeln('The SCS Mods Manager is installed.');
   }
 }
 
 Future<void> install(Directory dir) async {
+  if (await isInstalled(dir)) {
+    return stdout.writeln('The SCS Mods Manager is already installed.');
+  }
+
   stdout.writeln(
     '''This action will create a new directory inside the game folder called `.scsmm` and will create a `config.yaml` file in it.
 A default environment named `Default` will be created as a folder inside `.scsmm`.
@@ -244,6 +243,10 @@ Future<void> remove(Directory dir, String envName) async {
 }
 
 Future<void> uninstall(Directory dir) async {
+  if (!await isInstalled(dir)) {
+    return stdout.writeln('The SCS Mods Manager is not installed.');
+  }
+
   stdout.writeln(
     'This will delete all enviroments with every mod in them. The Default environment will not be deleted, it will be moved to the original path inside the game folder.',
   );
@@ -293,6 +296,10 @@ Future<Directory> getRootDirectory([String game = 'ets2']) async {
   } else {
     throw Exception('Could not find documents directory');
   }
+}
+
+Future<bool> isInstalled(Directory dir) async {
+  return Directory(p.join(dir.path, '.scsmm')).exists();
 }
 
 String getDocumentsPath() {
