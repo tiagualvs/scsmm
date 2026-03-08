@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 import 'package:scsmm/environment.dart';
 import 'package:yaml/yaml.dart';
@@ -42,7 +41,9 @@ class Config {
     final yaml = YamlEditor('');
     final config = copyWith(updatedAt: DateTime.now());
     yaml.update([], config.toMap());
-    await File(p.join(dir.path, '.scsmm', 'config.yaml')).writeAsString(yaml.toString(), flush: true);
+    await File(
+      p.join(dir.path, '.scsmm', 'config.yaml'),
+    ).writeAsString(yaml.toString(), flush: true);
   }
 
   Config copyWith({
@@ -72,7 +73,9 @@ class Config {
     return Config(
       currentEnvironment: map['current_environment'] as String,
       environments: List<Environment>.from(
-        (map['environments'] as List).map<Environment>((x) => Environment.fromMap(Map<String, dynamic>.from(x))),
+        (map['environments'] as List).map<Environment>(
+          (x) => Environment.fromMap(Map<String, dynamic>.from(x)),
+        ),
       ),
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
@@ -81,7 +84,8 @@ class Config {
 
   String toJson() => json.encode(toMap());
 
-  factory Config.fromJson(String source) => Config.fromMap(json.decode(source) as Map<String, dynamic>);
+  factory Config.fromJson(String source) =>
+      Config.fromMap(json.decode(source) as Map<String, dynamic>);
 
   @override
   String toString() {
@@ -91,7 +95,13 @@ class Config {
   @override
   bool operator ==(covariant Config other) {
     if (identical(this, other)) return true;
-    final listEquals = const DeepCollectionEquality().equals;
+    bool listEquals(List a, List b) {
+      if (a.length != b.length) return false;
+      for (int i = 0; i < a.length; i++) {
+        if (a[i] != b[i]) return false;
+      }
+      return true;
+    }
 
     return other.currentEnvironment == currentEnvironment &&
         listEquals(other.environments, environments) &&
@@ -101,6 +111,9 @@ class Config {
 
   @override
   int get hashCode {
-    return currentEnvironment.hashCode ^ environments.hashCode ^ createdAt.hashCode ^ updatedAt.hashCode;
+    return currentEnvironment.hashCode ^
+        environments.hashCode ^
+        createdAt.hashCode ^
+        updatedAt.hashCode;
   }
 }
