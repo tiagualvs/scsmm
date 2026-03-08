@@ -21,6 +21,15 @@
             "args": [
                 "-i"
             ]
+        },
+        {
+            "name": "uninstall",
+            "request": "launch",
+            "type": "dart",
+            "program": "bin/scsmm.dart",
+            "args": [
+                "-u"
+            ]
         }
     ]
 }

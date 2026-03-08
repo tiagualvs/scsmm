@@ -5,8 +5,6 @@ import 'package:path/path.dart' as p;
 import 'package:scsmm/config.dart';
 import 'package:scsmm/environment.dart';
 
-const String version = '0.0.1+10';
-
 ArgParser buildParser() {
   return ArgParser()
     ..addFlag(
@@ -87,7 +85,7 @@ Future<void> exec(List<String> arguments) async {
     if (results.wasParsed('help')) {
       return printUsage(argParser);
     } else if (results.wasParsed('version')) {
-      return stdout.writeln('SCS Mods Manager: $version');
+      return stdout.writeln('SCS Mods Manager: 1.0.0');
     } else if (results.wasParsed('install')) {
       return await install(dir);
     } else if (results.wasParsed('uninstall')) {
@@ -123,13 +121,17 @@ Future<void> install(Directory dir) async {
     );
   }
 
+  final Directory mod = Directory(p.join(dir.path, 'mod'));
+  final Directory scsmm = Directory(p.join(dir.path, '.scsmm'));
+  final Directory defaultEnv = Directory(p.join(scsmm.path, 'Default'));
+
   stdout.writeln(
     '''This action will create a new directory inside the game folder called `.scsmm` and will create a `config.yaml` file in it.
 A default environment named `Default` will be created as a folder inside `.scsmm`.
 This folder will contain every environment you create.
-Your current mod folder will be moved to `.scsmm/Default` and activated as the default environment.
+Your current mod folder will be moved to `${defaultEnv.path}` and activated as the default environment.
 A symlink will be created from the old mod folder location to the current environment.
-Initially, the symlink will point from `gamedir/mod` to `gamedir/.scsmm/Default`.''',
+Initially, the symlink will point from `${mod.path}` to `${defaultEnv.path}`.''',
   );
   stdout.write('Do you want to continue? (y/N) ');
   final option = stdin.readLineSync() ?? 'n';
@@ -138,27 +140,10 @@ Initially, the symlink will point from `gamedir/mod` to `gamedir/.scsmm/Default`
     return;
   }
   stdout.writeln('Installing...');
-  final mod = Directory(p.join(dir.path, 'mod'));
-  final scsmm = Directory(p.join(dir.path, '.scsmm'));
   if (!await scsmm.exists()) await scsmm.create(recursive: true);
-  final defaultEnv = Directory(p.join(scsmm.path, 'Default'));
   if (!await defaultEnv.exists()) await defaultEnv.create(recursive: true);
-  if (await mod.exists()) {
-    if (mod
-        .listSync()
-        .where((f) => f.statSync().type == FileSystemEntityType.directory)
-        .isNotEmpty) {
-      throw Exception(
-        'You have a folder in your mod directory. Please remove it and try again.',
-      );
-    }
-
-    for (final file in mod.listSync().map((f) => File(f.path))) {
-      await file.copy(
-        p.join(defaultEnv.path, p.join(defaultEnv.path, p.basename(file.path))),
-      );
-    }
-  }
+  if (!await mod.exists()) await mod.create(recursive: true);
+  await mod.moveContent(defaultEnv);
   await link(mod, defaultEnv);
   final config = Config.create(defaultEnv);
   await config.save(dir);
@@ -292,16 +277,18 @@ Future<void> uninstall(Directory dir) async {
   }
 }
 
-Future<void> link(Directory from, Directory to) async {
+Future<bool> link(Directory from, Directory to) async {
   try {
     if (await from.exists()) await from.delete(recursive: true);
-    await Process.run('mklink', [
+    final result = await Process.run('mklink', [
       '/D',
       from.path,
       to.path,
     ], runInShell: true);
-  } on Exception catch (e) {
-    stdout.writeln('Error: ${e.toString()}');
+    if (result.stderr != null) return false;
+    return true;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -334,4 +321,40 @@ String getDocumentsPath() {
     throw Exception('Could not find home directory');
   }
   return p.join(home, 'Documents');
+}
+
+extension DirectoryExt on Directory {
+  Directory add(String path) => Directory(p.join(this.path, path));
+
+  Future<void> moveContent(final Directory output) async {
+    final files = await this.list().toList();
+    if (!await output.exists()) await output.create(recursive: true);
+
+    for (final file in files) {
+      final stat = await file.stat();
+
+      switch (stat.type) {
+        case FileSystemEntityType.notFound:
+          break;
+        case FileSystemEntityType.directory:
+          await add(
+            p.basename(file.path),
+          ).moveContent(output.add(p.basename(file.path)));
+          break;
+        case FileSystemEntityType.file:
+          await File(
+            file.path,
+          ).copy(p.join(output.path, p.basename(file.path)));
+          break;
+        case FileSystemEntityType.link:
+          break;
+        case FileSystemEntityType.pipe:
+          break;
+        case FileSystemEntityType.unixDomainSock:
+          break;
+      }
+    }
+
+    await delete(recursive: true);
+  }
 }
