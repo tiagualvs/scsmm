@@ -1,14 +1,9 @@
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:scsmm/config.dart';
 import 'package:scsmm/environment.dart';
-import 'package:win32/win32.dart';
-
-const String version = '0.0.1+10';
 
 ArgParser buildParser() {
   return ArgParser()
@@ -52,17 +47,20 @@ ArgParser buildParser() {
     ..addOption(
       'create',
       abbr: 'c',
-      help: 'Create a new environment. Eg: scsmm --create EAA or scsmm -c "Pro Mods"',
+      help:
+          'Create a new environment. Eg: scsmm --create EAA or scsmm -c "Pro Mods"',
     )
     ..addOption(
       'remove',
       abbr: 'r',
-      help: 'Remove an environment. Eg: scsmm --remove EAA or scsmm -r "Pro Mods"',
+      help:
+          'Remove an environment. Eg: scsmm --remove EAA or scsmm -r "Pro Mods"',
     )
     ..addOption(
       'activate',
       abbr: 'a',
-      help: 'Activate the environment as default. Eg: scsmm --activate Default or scsmm -a Default',
+      help:
+          'Activate the environment as default. Eg: scsmm --activate Default or scsmm -a Default',
     )
     ..addFlag(
       'version',
@@ -87,7 +85,7 @@ Future<void> exec(List<String> arguments) async {
     if (results.wasParsed('help')) {
       return printUsage(argParser);
     } else if (results.wasParsed('version')) {
-      return stdout.writeln('SCS Mods Manager: $version');
+      return stdout.writeln('SCS Mods Manager: 1.0.0');
     } else if (results.wasParsed('install')) {
       return await install(dir);
     } else if (results.wasParsed('uninstall')) {
@@ -112,22 +110,28 @@ Future<void> status(Directory dir) async {
   if (!await isInstalled(dir)) {
     stdout.writeln('The SCS Mods Manager is not installed.');
   } else {
-    stdout.writeln('The SCS Mods Manager is installed.');
+    stdout.writeln('The SCS Mods Manager is installed. ${getDocumentsPath()}');
   }
 }
 
 Future<void> install(Directory dir) async {
   if (await isInstalled(dir)) {
-    return stdout.writeln('The SCS Mods Manager is already installed.');
+    return stdout.writeln(
+      'The SCS Mods Manager is already installed.',
+    );
   }
+
+  final Directory mod = Directory(p.join(dir.path, 'mod'));
+  final Directory scsmm = Directory(p.join(dir.path, '.scsmm'));
+  final Directory defaultEnv = Directory(p.join(scsmm.path, 'Default'));
 
   stdout.writeln(
     '''This action will create a new directory inside the game folder called `.scsmm` and will create a `config.yaml` file in it.
 A default environment named `Default` will be created as a folder inside `.scsmm`.
 This folder will contain every environment you create.
-Your current mod folder will be moved to `.scsmm/Default` and activated as the default environment.
+Your current mod folder will be moved to `${defaultEnv.path}` and activated as the default environment.
 A symlink will be created from the old mod folder location to the current environment.
-Initially, the symlink will point from `gamedir/mod` to `gamedir/.scsmm/Default`.''',
+Initially, the symlink will point from `${mod.path}` to `${defaultEnv.path}`.''',
   );
   stdout.write('Do you want to continue? (y/N) ');
   final option = stdin.readLineSync() ?? 'n';
@@ -136,20 +140,10 @@ Initially, the symlink will point from `gamedir/mod` to `gamedir/.scsmm/Default`
     return;
   }
   stdout.writeln('Installing...');
-  final mod = Directory(p.join(dir.path, 'mod'));
-  final scsmm = Directory(p.join(dir.path, '.scsmm'));
   if (!await scsmm.exists()) await scsmm.create(recursive: true);
-  final defaultEnv = Directory(p.join(scsmm.path, 'Default'));
   if (!await defaultEnv.exists()) await defaultEnv.create(recursive: true);
-  if (await mod.exists()) {
-    if (mod.listSync().where((f) => f.statSync().type == FileSystemEntityType.directory).isNotEmpty) {
-      throw Exception('You have a folder in your mod directory. Please remove it and try again.');
-    }
-
-    for (final file in mod.listSync().map((f) => File(f.path))) {
-      await file.copy(p.join(defaultEnv.path, p.join(defaultEnv.path, p.basename(file.path))));
-    }
-  }
+  if (!await mod.exists()) await mod.create(recursive: true);
+  await mod.moveContent(defaultEnv);
   await link(mod, defaultEnv);
   final config = Config.create(defaultEnv);
   await config.save(dir);
@@ -163,7 +157,9 @@ Future<void> create(Directory dir, String name) async {
   }
   Config config = await Config.load(dir);
   if (config.environments.any((env) => env.name == name)) {
-    stdout.writeln('Environment $name already exists. Please choose a different name.');
+    stdout.writeln(
+      'Environment $name already exists. Please choose a different name.',
+    );
     return;
   }
   final newEnv = Directory(p.join(dir.path, '.scsmm', name));
@@ -186,7 +182,9 @@ Future<void> list(Directory dir) async {
   );
   stdout.writeln('-' * 80);
   for (final environment in config.environments) {
-    stdout.writeln('${environment.name}${environment.name == config.currentEnvironment ? ' (active)' : ''}');
+    stdout.writeln(
+      '${environment.name}${environment.name == config.currentEnvironment ? ' (active)' : ''}',
+    );
   }
 }
 
@@ -194,7 +192,9 @@ Future<void> activate(Directory dir, String envName) async {
   Config config = await Config.load(dir);
   final index = config.environments.indexWhere((env) => env.name == envName);
   if (index == -1) {
-    stdout.writeln('Environment $envName does not exist. Please choose a different name.');
+    stdout.writeln(
+      'Environment $envName does not exist. Please choose a different name.',
+    );
     return;
   }
   final newEnv = config.environments[index];
@@ -214,7 +214,9 @@ Future<void> remove(Directory dir, String envName) async {
   Config config = await Config.load(dir);
   final index = config.environments.indexWhere((env) => env.name == envName);
   if (index == -1) {
-    stdout.writeln('Environment $envName does not exist. Please choose a different name.');
+    stdout.writeln(
+      'Environment $envName does not exist. Please choose a different name.',
+    );
     return;
   }
   final currentEnv = config.environments[index];
@@ -230,7 +232,9 @@ Future<void> remove(Directory dir, String envName) async {
     }
     await Directory(currentEnv.path).delete(recursive: true);
     config = config.copyWith(
-      environments: config.environments.where((env) => env.name != envName).toList(),
+      environments: config.environments
+          .where((env) => env.name != envName)
+          .toList(),
       updatedAt: DateTime.now(),
     );
     await config.save(dir);
@@ -250,7 +254,9 @@ Future<void> uninstall(Directory dir) async {
   stdout.writeln(
     'This will delete all enviroments with every mod in them. The Default environment will not be deleted, it will be moved to the original path inside the game folder.',
   );
-  stdout.write('This action cannot be undone. Are you sure you want to continue? [y/N] ');
+  stdout.write(
+    'This action cannot be undone. Are you sure you want to continue? [y/N] ',
+  );
   final option = stdin.readLineSync() ?? 'n';
   if (option.toLowerCase() == 'y') {
     stdout.writeln('Uninstalling...');
@@ -271,12 +277,18 @@ Future<void> uninstall(Directory dir) async {
   }
 }
 
-Future<void> link(Directory from, Directory to) async {
+Future<bool> link(Directory from, Directory to) async {
   try {
     if (await from.exists()) await from.delete(recursive: true);
-    await Process.runSync('mklink', ['/D', from.path, to.path], runInShell: true);
-  } on Exception catch (e) {
-    stdout.writeln('Error: ${e.toString()}');
+    final result = await Process.run('mklink', [
+      '/D',
+      from.path,
+      to.path,
+    ], runInShell: true);
+    if (result.stderr != null) return false;
+    return true;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -303,19 +315,46 @@ Future<bool> isInstalled(Directory dir) async {
 }
 
 String getDocumentsPath() {
-  final pathPtr = calloc<Pointer<Utf16>>();
-  final result = SHGetKnownFolderPath(
-    GUIDFromString(FOLDERID_Documents),
-    0,
-    NULL,
-    pathPtr,
-  );
-
-  if (result != S_OK) {
-    throw WindowsException(result);
+  final home =
+      Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+  if (home == null) {
+    throw Exception('Could not find home directory');
   }
+  return p.join(home, 'Documents');
+}
 
-  final path = pathPtr.value.toDartString();
-  calloc.free(pathPtr);
-  return path;
+extension DirectoryExt on Directory {
+  Directory add(String path) => Directory(p.join(this.path, path));
+
+  Future<void> moveContent(final Directory output) async {
+    final files = await this.list().toList();
+    if (!await output.exists()) await output.create(recursive: true);
+
+    for (final file in files) {
+      final stat = await file.stat();
+
+      switch (stat.type) {
+        case FileSystemEntityType.notFound:
+          break;
+        case FileSystemEntityType.directory:
+          await add(
+            p.basename(file.path),
+          ).moveContent(output.add(p.basename(file.path)));
+          break;
+        case FileSystemEntityType.file:
+          await File(
+            file.path,
+          ).copy(p.join(output.path, p.basename(file.path)));
+          break;
+        case FileSystemEntityType.link:
+          break;
+        case FileSystemEntityType.pipe:
+          break;
+        case FileSystemEntityType.unixDomainSock:
+          break;
+      }
+    }
+
+    await delete(recursive: true);
+  }
 }

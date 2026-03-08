@@ -5,11 +5,31 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "scsmm",
+            "name": "status",
             "request": "launch",
             "type": "dart",
             "program": "bin/scsmm.dart",
-            "args": ["-s"]
+            "args": [
+                "-s"
+            ]
+        },
+        {
+            "name": "install",
+            "request": "launch",
+            "type": "dart",
+            "program": "bin/scsmm.dart",
+            "args": [
+                "-i"
+            ]
+        },
+        {
+            "name": "uninstall",
+            "request": "launch",
+            "type": "dart",
+            "program": "bin/scsmm.dart",
+            "args": [
+                "-u"
+            ]
         }
     ]
 }
