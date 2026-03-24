@@ -85,7 +85,7 @@ Future<void> exec(List<String> arguments) async {
     if (results.wasParsed('help')) {
       return printUsage(argParser);
     } else if (results.wasParsed('version')) {
-      return stdout.writeln('SCS Mods Manager: 1.0.0');
+      return stdout.writeln('SCS Mods Manager: 1.0.1');
     } else if (results.wasParsed('install')) {
       return await install(dir);
     } else if (results.wasParsed('uninstall')) {
@@ -110,7 +110,7 @@ Future<void> status(Directory dir) async {
   if (!await isInstalled(dir)) {
     stdout.writeln('The SCS Mods Manager is not installed.');
   } else {
-    stdout.writeln('The SCS Mods Manager is installed. ${getDocumentsPath()}');
+    stdout.writeln('The SCS Mods Manager is installed.');
   }
 }
 
@@ -144,7 +144,11 @@ Initially, the symlink will point from `${mod.path}` to `${defaultEnv.path}`.'''
   if (!await defaultEnv.exists()) await defaultEnv.create(recursive: true);
   if (!await mod.exists()) await mod.create(recursive: true);
   await mod.moveContent(defaultEnv);
-  await link(mod, defaultEnv);
+  final linked = await link(mod, defaultEnv);
+  if (!linked) {
+    await uninstall(dir, force: true);
+    return stdout.writeln('Failed to create symlink.');
+  }
   final config = Config.create(defaultEnv);
   await config.save(dir);
   stdout.writeln('The SCS Mods Manager has been installed.');
@@ -246,30 +250,34 @@ Future<void> remove(Directory dir, String envName) async {
   }
 }
 
-Future<void> uninstall(Directory dir) async {
+Future<void> uninstall(Directory dir, {bool force = false}) async {
   if (!await isInstalled(dir)) {
-    return stdout.writeln('The SCS Mods Manager is not installed.');
+    if (!force) stdout.writeln('The SCS Mods Manager is not installed.');
+    return;
   }
 
-  stdout.writeln(
-    'This will delete all enviroments with every mod in them. The Default environment will not be deleted, it will be moved to the original path inside the game folder.',
-  );
-  stdout.write(
-    'This action cannot be undone. Are you sure you want to continue? [y/N] ',
-  );
-  final option = stdin.readLineSync() ?? 'n';
+  if (!force) {
+    stdout.writeln(
+      'This will delete all enviroments with every mod in them. The Default environment will not be deleted, it will be moved to the original path inside the game folder.',
+    );
+    stdout.write(
+      'This action cannot be undone. Are you sure you want to continue? [y/N] ',
+    );
+  }
+  final option = switch (force) {
+    true => 'y',
+    false => stdin.readLineSync() ?? 'n',
+  };
   if (option.toLowerCase() == 'y') {
-    stdout.writeln('Uninstalling...');
+    if (!force) stdout.writeln('Uninstalling...');
     final mod = Directory(p.join(dir.path, 'mod'));
-    await mod.delete(recursive: true);
+    if (await mod.exists()) await mod.delete(recursive: true);
     final defaultEnv = Directory(p.join(dir.path, '.scsmm', 'Default'));
     await mod.create(recursive: true);
-    for (final file in defaultEnv.listSync().map((f) => File(f.path))) {
-      await file.copy(p.join(mod.path, p.basename(file.path)));
-    }
+    await defaultEnv.moveContent(mod);
     final scsmmDir = Directory(p.join(dir.path, '.scsmm'));
     await scsmmDir.delete(recursive: true);
-    stdout.writeln('The SCS Mods Manager has been uninstalled.');
+    if (!force) stdout.writeln('The SCS Mods Manager has been uninstalled.');
     return;
   } else {
     stdout.writeln('Action cancelled.');
@@ -280,14 +288,9 @@ Future<void> uninstall(Directory dir) async {
 Future<bool> link(Directory from, Directory to) async {
   try {
     if (await from.exists()) await from.delete(recursive: true);
-    final result = await Process.run('mklink', [
-      '/D',
-      from.path,
-      to.path,
-    ], runInShell: true);
-    if (result.stderr != null) return false;
-    return true;
-  } catch (_) {
+    return await createLink(from, to);
+  } on Exception catch (e) {
+    stdout.writeln(e.toString());
     return false;
   }
 }
@@ -357,4 +360,58 @@ extension DirectoryExt on Directory {
 
     await delete(recursive: true);
   }
+}
+
+Future<bool> createLink(Directory from, Directory to) async {
+  try {
+    final os = Platform.operatingSystem;
+    switch (os) {
+      case 'windows':
+        {
+          String? defaultTerminal;
+          String? defaultCommand;
+          for (final (terminal, command) in terminalsWithCommand(from, to)) {
+            final checkPs = await Process.run('where', [terminal]);
+            if (checkPs.exitCode != 0) continue;
+            defaultTerminal = terminal;
+            defaultCommand = command;
+            break;
+          }
+          if (defaultTerminal == null || defaultCommand == null) {
+            throw Exception(
+              'Could not find a terminal with the command to create a link',
+            );
+          }
+          final result = await Process.run(
+            defaultTerminal,
+            defaultCommand.split(' '),
+            runInShell: true,
+          );
+          if (result.exitCode != 0) {
+            throw Exception('Could not create link');
+          }
+          return true;
+        }
+      default:
+        {
+          return false;
+        }
+    }
+  } on Exception catch (e) {
+    stdout.writeln(e.toString());
+    return false;
+  }
+}
+
+List<(String, String)> terminalsWithCommand(Directory from, Directory to) {
+  return [
+    (
+      'powershell',
+      'New-Item -ItemType Junction -Path "${from.path}" -Target "${to.path}"',
+    ),
+    (
+      'cmd',
+      'mklink /J "${from.path}" "${to.path}"',
+    ),
+  ];
 }
